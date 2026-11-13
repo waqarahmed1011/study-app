@@ -102,5 +102,8 @@ describe("diagram geometry", () => {
     expect(labelMatches("biceps brachi", "Biceps brachii")).toBe(true);
     expect(labelMatches("the trapezius muscle", "Trapezius")).toBe(true);
     expect(labelMatches("triceps", "Biceps brachii")).toBe(false);
+    expect(labelMatches("C3", "C4 vertebra")).toBe(false);
+    expect(labelMatches("structure 9", "Structure 3")).toBe(false);
+    expect(labelMatches("c4 vertebra", "C4 vertebra")).toBe(true);
   });
 });

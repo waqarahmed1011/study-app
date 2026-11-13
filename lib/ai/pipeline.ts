@@ -3,7 +3,7 @@ import type { Repo } from "@/lib/data/repo";
 import { box2dToBox } from "@/lib/diagram/geometry";
 import { newFsrsState } from "@/lib/study/fsrs";
 import { normaliseQuestion } from "@/lib/study/questions";
-import type { Diagram, DiagramRegion, GenStep, Kit, Source, Topic } from "@/lib/types";
+import { GEN_STEPS, type Diagram, type DiagramRegion, type GenStep, type Kit, type Source, type Topic } from "@/lib/types";
 import { nanoid } from "nanoid";
 import * as P from "./prompts";
 import { getAI } from "./provider";
@@ -19,10 +19,13 @@ export function materialOf(sources: Source[]) {
 async function setStep(repo: Repo, kit: Kit, step: GenStep, status: "running" | "done" | "error", error?: string) {
   const fresh = (await repo.get("kits", kit.id)) ?? kit;
   const gen_steps = { ...fresh.gen_steps, [step]: status };
+  const allDone = GEN_STEPS.every((s) => gen_steps[s] === "done");
+  // a kit that's already built stays usable while it's being updated
+  const kitStatus = fresh.status === "ready" ? "ready" : status === "error" ? "error" : allDone ? "ready" : "generating";
   return repo.update("kits", kit.id, {
     gen_steps,
     gen_error: error ?? (status === "error" ? "Unknown error" : null),
-    status: status === "error" ? "error" : step === "summary" && status === "done" ? "ready" : "generating",
+    status: kitStatus,
     updated_at: new Date().toISOString(),
   });
 }
@@ -148,6 +151,8 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         break;
       }
       case "flashcards": {
+        // nothing new to make cards from (e.g. "Update kit" with no new uploads)
+        if (!fresh.length && (await repo.list("flashcards", { kit_id: kitId }, { limit: 1 })).length) break;
         const ts = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
         const res = await ai.json({ task: "flashcards", schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
         const resolve = topicResolver(ts);
@@ -161,6 +166,7 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         break;
       }
       case "questions": {
+        if (!fresh.length && (await repo.list("questions", { kit_id: kitId }, { limit: 1 })).length) break;
         const ts = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
         await generateQuestions(repo, kitId, newMaterial, ts, questionTarget(newMaterial));
         for (const s of fresh) await repo.update("sources", s.id, { generated: true });

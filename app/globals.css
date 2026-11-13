@@ -1,26 +1,147 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* study.ai design tokens. Three colour modes: midnight (default), daylight, forest. */
+:root,
+[data-theme="midnight"] {
+  --bg: #0b1120;
+  --surface: #131b2e;
+  --surface-2: #1b2540;
+  --border: #283454;
+  --text: #e8edf7;
+  --muted: #94a0bb;
+  --primary: #2dd4bf;
+  --primary-ink: #042f2a;
+  --accent: #fbbf24;
+  --good: #22c55e;
+  --good-soft: rgba(34, 197, 94, 0.16);
+  --bad: #f05252;
+  --bad-soft: rgba(240, 82, 82, 0.16);
+  --opt-1: rgba(45, 212, 191, 0.18);
+  --opt-2: rgba(251, 191, 36, 0.18);
+  --opt-3: rgba(167, 139, 250, 0.2);
+  --opt-4: rgba(96, 165, 250, 0.2);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+[data-theme="daylight"] {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-2: #eef2f8;
+  --border: #dce3ee;
+  --text: #0f172a;
+  --muted: #586580;
+  --primary: #0d9488;
+  --primary-ink: #ffffff;
+  --accent: #b45309;
+  --good: #16a34a;
+  --good-soft: rgba(22, 163, 74, 0.12);
+  --bad: #dc2626;
+  --bad-soft: rgba(220, 38, 38, 0.1);
+  --opt-1: #d7f3ef;
+  --opt-2: #fbeccc;
+  --opt-3: #e7e1fb;
+  --opt-4: #dceafc;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  color-scheme: light;
+}
+
+[data-theme="forest"] {
+  --bg: #0d1712;
+  --surface: #14231b;
+  --surface-2: #1b2f24;
+  --border: #2a4234;
+  --text: #e6f2ea;
+  --muted: #98b3a3;
+  --primary: #a3e635;
+  --primary-ink: #1a2e05;
+  --accent: #fb923c;
+  --good: #4ade80;
+  --good-soft: rgba(74, 222, 128, 0.16);
+  --bad: #f87171;
+  --bad-soft: rgba(248, 113, 113, 0.16);
+  --opt-1: rgba(163, 230, 53, 0.16);
+  --opt-2: rgba(251, 146, 60, 0.18);
+  --opt-3: rgba(125, 211, 252, 0.16);
+  --opt-4: rgba(244, 114, 182, 0.16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-card: var(--shadow);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Markdown documents (study guide, summary, chat) */
+.prose-doc {
+  line-height: 1.65;
+  font-size: 0.975rem;
+}
+.prose-doc h1 { font-size: 1.6rem; font-weight: 700; margin: 0.4em 0 0.6em; }
+.prose-doc h2 { font-size: 1.25rem; font-weight: 700; margin: 1.4em 0 0.5em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
+.prose-doc h3 { font-size: 1.05rem; font-weight: 700; margin: 1.1em 0 0.4em; }
+.prose-doc p { margin: 0.6em 0; }
+.prose-doc ul { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
+.prose-doc ol { list-style: decimal; padding-left: 1.4em; margin: 0.5em 0; }
+.prose-doc li { margin: 0.25em 0; }
+.prose-doc strong { color: var(--text); font-weight: 700; }
+.prose-doc code { background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 6px; font-size: 0.9em; }
+.prose-doc pre { background: var(--surface-2); padding: 0.8em; border-radius: 10px; overflow-x: auto; }
+.prose-doc table { width: 100%; border-collapse: collapse; margin: 0.8em 0; display: block; overflow-x: auto; }
+.prose-doc th, .prose-doc td { border: 1px solid var(--border); padding: 0.4em 0.6em; text-align: left; vertical-align: top; }
+.prose-doc th { background: var(--surface-2); }
+.prose-doc blockquote { border-left: 3px solid var(--primary); padding-left: 0.8em; color: var(--muted); }
+.prose-doc a { color: var(--primary); text-decoration: underline; }
+.prose-doc .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+
+/* flashcard flip */
+.flip { perspective: 1200px; }
+.flip-inner { transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); transform-style: preserve-3d; }
+.flip.flipped .flip-inner { transform: rotateY(180deg); }
+.flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip-back { transform: rotateY(180deg); }
+
+@keyframes pop { 0% { transform: scale(0.96); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+.animate-pop { animation: pop 0.18s ease-out; }
+@keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) } }
+.animate-shake { animation: shake 0.25s ease-in-out 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media print {
+  header, nav, .no-print { display: none !important; }
+  body { background: white; color: black; }
+  .prose-doc { color: black; }
 }

@@ -84,7 +84,7 @@ export function createMockProvider(): AIProvider {
       const topics = topicNames(prompt);
       switch (task) {
         case "outline": {
-          const headings = [...material.matchAll(/^#{1,3}\s+(.+)$/gm)].map((m) => m[1].trim());
+          const headings = [...material.matchAll(/^#{1,3}\s+(.+)$/gm)].map((m) => m[1].trim()).filter((h) => !h.startsWith("Source:"));
           const names = (headings.length >= 2 ? headings : ["Core concepts", "Key processes", "Applications"]).slice(0, 8);
           const title = between(prompt, "title") || headings[0] || "My study kit";
           return { title: title.slice(0, 60), emoji: "📘", topics: names.map((n) => ({ name: n, description: `Everything in your notes about ${n.toLowerCase()}.` })) } as never;

@@ -1,4 +1,5 @@
 import "server-only";
+import { connection } from "next/server";
 import { useSupabase } from "@/lib/config";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createLocalRepo } from "./local";
@@ -9,6 +10,8 @@ export class UnauthorizedError extends Error {}
 
 /** Repo for the current request's user. Throws UnauthorizedError if signed out. */
 export async function getRepo(): Promise<Repo> {
+  // per-user data: always read at request time, never prerendered
+  await connection();
   if (!useSupabase) return createLocalRepo();
   const sb = await createSupabaseServer();
   const { data } = await sb.auth.getUser();

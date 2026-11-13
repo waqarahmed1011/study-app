@@ -44,6 +44,9 @@ export function labelMatches(answer: string, label: string) {
   const a = norm(answer);
   const l = norm(label);
   if (!a) return false;
+  // numbers carry meaning (C3 vs C4 vertebra, rib 3 vs rib 4): they must match exactly
+  const digits = (s: string) => (s.match(/\d+/g) ?? []).join(",");
+  if (digits(a) !== digits(l)) return false;
   return a === l || (a.length >= 4 && (l.includes(a) || a.includes(l))) || levenshtein(a, l) <= Math.max(1, Math.floor(l.length / 6));
 }
 
