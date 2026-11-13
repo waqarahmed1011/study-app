@@ -20,7 +20,8 @@ export const viewport: Viewport = {
 };
 
 // Applies the saved colour mode before paint so there's no flash.
-const themeScript = `try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}`;
+// For "custom", the derived CSS variables saved by Settings are applied inline.
+const themeScript = `try{var d=document.documentElement,t=localStorage.getItem('theme');if(t)d.dataset.theme=t;if(t==='custom'){var v=JSON.parse(localStorage.getItem('themeVars')||'{}');for(var k in v)d.style.setProperty(k,v[k]);if(v['--bg']){var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',v['--bg'])}}}catch(e){}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

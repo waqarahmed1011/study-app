@@ -107,3 +107,26 @@ describe("diagram geometry", () => {
     expect(labelMatches("c4 vertebra", "C4 vertebra")).toBe(true);
   });
 });
+
+import { contrast, derivePalette, rotateHue } from "@/lib/theme";
+
+describe("custom theme", () => {
+  it("keeps text readable on any background", () => {
+    for (const bg of ["#000000", "#ffffff", "#808080", "#ff00ff", "#1a1033", "#fdf6e3", "#3b82f6"]) {
+      const p = derivePalette({ background: bg, primary: "#2dd4bf", accent: "#fbbf24" });
+      expect(contrast(p["--text"], bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p["--text"], p["--surface"])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it("picks readable button text for the main colour", () => {
+    for (const primary of ["#ffff00", "#000080", "#2dd4bf", "#c084fc", "#ef4444"]) {
+      const p = derivePalette({ background: "#111111", primary, accent: "#fbbf24" });
+      expect(contrast(p["--primary-ink"], primary)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it("switches to light mode for light backgrounds", () => {
+    expect(derivePalette({ background: "#fafafa", primary: "#0d9488", accent: "#b45309" })["color-scheme"]).toBe("light");
+    expect(derivePalette({ background: "#101010", primary: "#0d9488", accent: "#b45309" })["color-scheme"]).toBe("dark");
+    expect(rotateHue("#ff0000", 120)).toBe("#00ff00");
+  });
+});
