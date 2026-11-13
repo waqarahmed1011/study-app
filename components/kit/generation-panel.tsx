@@ -37,7 +37,18 @@ export function GenerationPanel({ kit, all = false, onDone }: { kit: Kit; all?: 
       status[step] = "running";
       setSteps({ ...status });
       try {
-        await api(`/api/kits/${kit.id}/generate`, { body: { step } });
+        // The free AI tier sometimes rejects a request when several arrive at once.
+        // Retry quietly (the step stays "running") before showing an error.
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await api(`/api/kits/${kit.id}/generate`, { body: { step } });
+            break;
+          } catch (err) {
+            const permanent = /not found|not signed in|unsupported|none of the uploads/i.test((err as Error).message);
+            if (permanent || attempt >= 3) throw err;
+            await new Promise((r) => setTimeout(r, 2500 * attempt));
+          }
+        }
         status[step] = "done";
       } catch (err) {
         status[step] = "error";

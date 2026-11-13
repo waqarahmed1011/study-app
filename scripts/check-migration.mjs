@@ -58,6 +58,10 @@ console.log("tables:", tables.rows.map((r) => r.tablename).join(", "));
 console.log("A sees", mine.rows.length, "kit(s), owned by", mine.rows[0]?.user_id === A ? "A" : "??");
 console.log("B sees", theirs.rows.length, "kit(s)");
 console.log("B inserting as A blocked:", blocked);
+// the app writes millisecond timestamps as card positions; a 32-bit column rejects them
+await as(A, `insert into public.flashcards (kit_id, front, back, fsrs, position) values ('${(await as(A, "select id from public.kits limit 1")).rows[0].id}', 'f', 'b', '{}'::jsonb, ${Date.now()})`);
+console.log("flashcard with timestamp position inserted");
+
 // atomic step updates: parallel steps must not lose each other's status
 const kitId = (await as(A, `select id from public.kits limit 1`)).rows[0].id;
 for (const step of ["extract", "outline"]) await as(A, `select public.set_kit_step('${kitId}', '${step}', 'done')`);

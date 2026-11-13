@@ -20,6 +20,23 @@ async function setStep(repo: Repo, kit: Kit, step: GenStep, status: "running" | 
   return repo.setKitStep(kit.id, step, status, error);
 }
 
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/**
+ * Drop items already in the kit (same text). Generation steps can be retried
+ * after a timeout that actually finished, and this keeps a retry from
+ * creating duplicates.
+ */
+function notAlreadyThere<T>(items: T[], text: (t: T) => string, existing: string[]) {
+  const seen = new Set(existing.map(norm));
+  return items.filter((it) => {
+    const k = norm(text(it));
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 /** Map a topic name from the model back to a topic id (case-insensitive, falls back to the first topic). */
 function topicResolver(topics: Topic[]) {
   const byName = new Map(topics.map((t) => [t.name.toLowerCase().trim(), t.id]));
@@ -156,10 +173,10 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         const res = await ai.json({ task: "flashcards", schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
         const resolve = topicResolver(ts);
         const now = new Date();
+        const haveCards = (await repo.list("flashcards", { kit_id: kitId })).filter((c) => !c.diagram_id).map((c) => c.front);
         await repo.insertMany(
           "flashcards",
-          res.cards
-            .filter((c) => c.front.trim() && c.back.trim())
+          notAlreadyThere(res.cards.filter((c) => c.front.trim() && c.back.trim()), (c) => c.front, haveCards)
             .map((c, i) => ({
               kit_id: kitId, topic_id: resolve(c.topic), front: c.front.trim(), back: c.back.trim(), fsrs: newFsrsState(now),
               front_image: null, back_image: null, position: Date.now() + i, diagram_id: null, region_id: null, gen_kind: null,
@@ -215,10 +232,15 @@ export async function generateQuestions(repo: Repo, kitId: string, material: str
   const ok = settled.filter((r): r is PromiseFulfilledResult<{ questions: RawQuestion[] }> => r.status === "fulfilled");
   if (!ok.length) throw (settled[0] as PromiseRejectedResult).reason;
   const resolve = topicResolver(topics);
-  const rows = ok
-    .flatMap((r) => r.value.questions)
-    .map(normaliseQuestion)
-    .filter((q): q is NonNullable<typeof q> => q !== null)
+  const haveQuestions = (await repo.list("questions", { kit_id: kitId })).filter((q) => !q.diagram_id).map((q) => q.prompt);
+  const rows = notAlreadyThere(
+    ok
+      .flatMap((r) => r.value.questions)
+      .map(normaliseQuestion)
+      .filter((q): q is NonNullable<typeof q> => q !== null),
+    (q) => q.prompt,
+    haveQuestions,
+  )
     .map((q) => ({
       kit_id: kitId,
       topic_id: resolve(q.topic),
