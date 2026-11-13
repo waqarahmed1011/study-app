@@ -60,11 +60,12 @@ function stripFences(s: string) {
 }
 
 /**
- * Thinking roughly triples response time (14s vs 5.6s for a question batch), so
- * it's off unless a task asks for it. Lite models don't take the setting at all.
+ * The main model thinks by default (best output). A caller can pass think: false
+ * to skip it for speed; nothing in the app does that today, because quality
+ * comes first. Lite models don't take the setting at all.
  */
 function thinkingFor(lite: boolean | undefined, think: boolean | undefined) {
-  if (lite || think) return undefined;
+  if (lite || think !== false) return undefined;
   return { thinkingBudget: 0 };
 }
 
@@ -134,8 +135,7 @@ export function createGeminiProvider(apiKey: string): AIProvider {
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           })),
-          // no thinking: the first words of a tutor reply arrive in about a second
-          config: { systemInstruction: system, temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+          config: { systemInstruction: system, temperature: 0.5 },
         }),
       );
       for await (const chunk of stream) {

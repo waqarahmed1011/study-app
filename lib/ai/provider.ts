@@ -23,8 +23,8 @@ export interface AIProvider {
     system?: string;
     prompt: string;
     files?: FilePart[];
-    lite?: boolean; // the fast Lite model, for simple jobs (topics, cards, grading, hints)
-    think?: boolean; // let the main model reason first: slower, only where accuracy needs it
+    lite?: boolean; // the Lite model, only for simple jobs: finding topics, grading, hints
+    think?: boolean; // the main model thinks unless this is false
   }): Promise<z.infer<S>>;
   text(opts: {
     task: string;

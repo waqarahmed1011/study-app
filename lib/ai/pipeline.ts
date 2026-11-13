@@ -60,8 +60,7 @@ export async function detectDiagram(repo: Repo, source: Source, file?: { data: U
   const res = await ai.json({
     task: "diagram_detect",
     schema: DiagramDetectSchema,
-    // the one task where thinking clearly helps: without it numbered labels get misread
-    think: true,
+    // thinking matters here: without it numbered labels get misread
     prompt: P.diagramDetectPrompt,
     files: [{ mimeType: source.mime || f.contentType, data: f.data }],
   });
@@ -129,6 +128,8 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         const existing = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
         const out = await ai.json({
           task: "outline",
+          // Lite: splitting notes into topics is simple, and every later step waits
+          // on it (7s -> 1s); in testing it chose the same topics as the full model
           lite: true,
           schema: OutlineSchema,
           system: P.SYSTEM_TUTOR,
@@ -152,7 +153,7 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         // nothing new to make cards from (e.g. "Update kit" with no new uploads)
         if (!fresh.length && (await repo.list("flashcards", { kit_id: kitId }, { limit: 1 })).length) break;
         const ts = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
-        const res = await ai.json({ task: "flashcards", lite: true, schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
+        const res = await ai.json({ task: "flashcards", schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
         const resolve = topicResolver(ts);
         const now = new Date();
         await repo.insertMany(
@@ -178,8 +179,6 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         const ts = (await topics()).map((t) => t.name);
         const md = await ai.text({
           task: step,
-          // the summary is short and simple; the guide gets the main model
-          lite: step === "summary",
           system: P.SYSTEM_TUTOR,
           prompt: step === "guide" ? P.guidePrompt(allMaterial, ts) : P.summaryPrompt(allMaterial, ts),
         });
