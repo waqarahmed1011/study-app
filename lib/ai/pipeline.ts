@@ -77,6 +77,7 @@ export async function detectDiagram(repo: Repo, source: Source, file?: { data: U
     .map(({ s, box }) => ({
       id: nanoid(8),
       label: s.label.trim(),
+      marker: s.marker?.trim() || undefined,
       box: box!,
       labelBox: box2dToBox(s.label_box_2d),
       confirmed: false,
@@ -161,7 +162,10 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
           "flashcards",
           res.cards
             .filter((c) => c.front.trim() && c.back.trim())
-            .map((c) => ({ kit_id: kitId, topic_id: resolve(c.topic), front: c.front.trim(), back: c.back.trim(), fsrs: newFsrsState(now) })),
+            .map((c, i) => ({
+              kit_id: kitId, topic_id: resolve(c.topic), front: c.front.trim(), back: c.back.trim(), fsrs: newFsrsState(now),
+              front_image: null, back_image: null, position: Date.now() + i, diagram_id: null, region_id: null, gen_kind: null,
+            })),
         );
         break;
       }
@@ -217,6 +221,9 @@ export async function generateQuestions(repo: Repo, kitId: string, material: str
       difficulty: q.difficulty,
       origin: "kit" as const,
       diagram_id: null,
+      image: null,
+      region_id: null,
+      gen_kind: null,
       verified: true,
       rating: 0,
     }));

@@ -75,6 +75,20 @@ export interface FsrsState {
   last_review?: ISODate;
 }
 
+/**
+ * A picture on a card or question. Either an uploaded image, or a diagram with
+ * one structure highlighted and every printed label covered.
+ */
+export interface ImageRef {
+  path: string; // storage path, served at /api/files/<path>
+  highlight?: Box | null; // structure to outline
+  covers?: Box[]; // printed labels/numbers to hide
+  zoom?: boolean; // crop around the highlight instead of showing the whole image
+}
+
+/** How a diagram-generated card or question was made, so re-syncing updates it in place. */
+export type DiagramGenKind = "img_to_name" | "name_to_img" | "fact" | "identify" | "which_image";
+
 export interface Flashcard {
   id: string;
   user_id: string;
@@ -82,6 +96,12 @@ export interface Flashcard {
   topic_id: string | null;
   front: string;
   back: string;
+  front_image: ImageRef | null;
+  back_image: ImageRef | null;
+  position: number;
+  diagram_id: string | null;
+  region_id: string | null;
+  gen_kind: DiagramGenKind | null;
   fsrs: FsrsState;
   created_at: ISODate;
 }
@@ -105,7 +125,7 @@ export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
 
 // payload = what the student sees, answer = what grading needs.
 export type QuestionPayload =
-  | { options: string[] } // mcq, multi_select, true_false
+  | { options: string[]; optionImages?: ImageRef[] } // mcq, multi_select, true_false (optionImages: pick-the-picture)
   | { left: string[]; right: string[] } // matching (right is shuffled)
   | { items: string[] } // ordering (shuffled)
   | Record<string, never>; // short_answer
@@ -129,6 +149,9 @@ export interface Question {
   difficulty: 1 | 2 | 3;
   origin: "kit" | "diagram";
   diagram_id: string | null;
+  image: ImageRef | null; // shown above the prompt
+  region_id: string | null;
+  gen_kind: DiagramGenKind | null;
   verified: boolean;
   rating: number; // thumbs: -1, 0, 1
   created_at: ISODate;
@@ -210,6 +233,7 @@ export interface Box {
 export interface DiagramRegion {
   id: string;
   label: string;
+  marker?: string; // number/letter printed on a quiz diagram ("2"), if any
   box: Box; // the structure itself (tap target)
   labelBox: Box | null; // where the printed label sits (covered in hide mode)
   confirmed: boolean;

@@ -58,8 +58,13 @@ export function DiagramStudio({ kitId, diagram, image }: { kitId: string; diagra
     setRegions(next);
   };
 
+  const [synced, setSynced] = useState<string | null>(null);
+
   async function finishEditing() {
     await api(`/api/diagrams/${diagram.id}`, { method: "PATCH", body: { regions, title, status: "confirmed" } });
+    // build the picture flashcards and Smart Study/test questions from the confirmed labels
+    const res = await api<{ cards: number; questions: number }>(`/api/diagrams/${diagram.id}/sync`, { body: {} }).catch(() => null);
+    if (res) setSynced(`${res.cards} picture flashcards and ${res.questions} picture questions are ready in Flashcards, Smart Study and Tests.`);
     setMode("hide");
     router.refresh();
   }
@@ -102,6 +107,12 @@ export function DiagramStudio({ kitId, diagram, image }: { kitId: string; diagra
       </div>
 
       {error && <div className="mb-4"><ErrorNote>{error}</ErrorNote></div>}
+      {synced && mode !== "edit" && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-good/40 bg-good-soft px-4 py-3 text-sm text-good">
+          <span>{synced}</span>
+          <button type="button" onClick={() => setSynced(null)} className="font-semibold" aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       {mode === "edit" && <Editor diagramId={diagram.id} image={image} regions={regions} onChange={update} onDone={finishEditing} onError={setError} />}
       {mode === "hide" && <HideQuiz diagramId={diagram.id} image={image} regions={confirmed} />}
@@ -263,6 +274,7 @@ function Editor({ diagramId, image, regions, onChange, onDone, onError }: { diag
             <li key={r.id} className={cx("flex items-center gap-2 rounded-xl px-2 py-1.5", r.id === selected ? "bg-surface-2" : "hover:bg-surface-2/60")}>
               <input type="checkbox" checked={r.confirmed} onChange={(e) => patch(r.id, { confirmed: e.target.checked })} className="size-4 accent-[var(--good)]" aria-label={`Confirm ${r.label || "region"}`} />
               <button type="button" onClick={() => setSelected(r.id)} className="min-w-0 flex-1 truncate text-left text-sm">
+                {r.marker && <span className="mr-1.5 rounded bg-surface-2 px-1.5 py-0.5 text-xs font-bold text-muted">#{r.marker}</span>}
                 {r.label || <span className="text-muted italic">unnamed</span>}
               </button>
               <button type="button" onClick={() => onChange(regions.filter((x) => x.id !== r.id))} className="grid size-7 place-items-center rounded-full text-muted hover:text-bad" aria-label={`Delete ${r.label}`}>
@@ -431,7 +443,7 @@ function TapQuiz({ diagramId, image, regions }: { diagramId: string; image: stri
       </div>
       <Card className="h-fit space-y-3 p-4">
         <div className="text-sm text-muted">Tap the</div>
-        <div className="text-2xl font-bold">{current.label}</div>
+        <div className="text-2xl font-bold" data-testid="tap-target">{current.label}</div>
         {feedback && (
           <div className={cx("rounded-xl p-3 text-sm font-semibold", feedback.ok ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>
             {feedback.ok ? "Correct!" : feedback.tapped ? `That's the ${feedback.tapped.label}. The green box is the ${current.label}.` : `Missed. The green box is the ${current.label}.`}
@@ -472,6 +484,8 @@ function Facts({ diagramId }: { diagramId: string }) {
   async function setVerified(q: Question, verified: boolean) {
     setQuestions((qs) => qs?.map((x) => (x.id === q.id ? { ...x, verified } : x)) ?? null);
     await api(`/api/questions/${q.id}`, { method: "PATCH", body: { verified } });
+    // checked facts become picture flashcards; unchecking removes them
+    await api(`/api/diagrams/${diagramId}/sync`, { body: {} }).catch(() => {});
   }
 
   async function remove(q: Question) {
@@ -486,7 +500,7 @@ function Facts({ diagramId }: { diagramId: string }) {
       <Card className="border-accent/50 p-4 text-sm">
         <div className="font-semibold text-accent">AI-written facts can be wrong</div>
         <p className="mt-1 text-muted">
-          Check each one against your notes or textbook. Verified questions join Smart Study and practice tests; unverified ones never do.
+          Check each one against your notes or textbook. Verified questions join Smart Study and practice tests, and become picture flashcards; unverified ones never do.
         </p>
         <Button className="mt-3" onClick={generate} disabled={busy}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} {questions?.length ? "Regenerate unverified" : "Write fact questions"}

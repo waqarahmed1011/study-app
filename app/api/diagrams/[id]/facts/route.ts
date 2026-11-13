@@ -29,6 +29,7 @@ export const POST = route<IdCtx>(async (_req, repo, { params }) => {
     .map((q) => ({
       kit_id: d.kit_id, topic_id: d.topic_id, type: q.type, prompt: q.prompt, payload: q.payload, answer: q.answer,
       explanation: q.explanation, difficulty: q.difficulty, origin: "diagram" as const, diagram_id: d.id, verified: false, rating: 0,
+      image: null, region_id: null, gen_kind: "fact" as const,
     }));
   return { questions: await repo.insertMany("questions", rows) };
 });

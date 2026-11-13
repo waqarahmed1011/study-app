@@ -16,6 +16,7 @@ export const PATCH = route<IdCtx>(async (req, repo, { params }) => {
       .map((r): DiagramRegion => ({
         id: r.id,
         label: r.label.trim().slice(0, 80),
+        marker: r.marker?.trim().slice(0, 4) || undefined,
         box: clampBox(r.box),
         labelBox: r.labelBox ? clampBox(r.labelBox) : null,
         confirmed: Boolean(r.confirmed),

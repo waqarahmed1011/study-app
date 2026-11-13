@@ -2,7 +2,8 @@
 import { ArrowDown, ArrowUp, Check, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { PublicQuestion } from "@/lib/api";
-import type { QuestionAnswer } from "@/lib/types";
+import type { ImageRef, QuestionAnswer } from "@/lib/types";
+import { DiagramImage } from "@/components/diagram-image";
 import { InlineMd } from "@/components/markdown";
 import { cx } from "@/components/ui";
 
@@ -52,6 +53,7 @@ export function QuestionView({ q, value, onChange, reveal, onPick, disabled, com
   const locked = disabled || Boolean(reveal);
   return (
     <div data-testid="question" data-qid={q.id}>
+      {q.image && <DiagramImage image={q.image} maxHeight={compact ? 220 : 300} className="mb-4" alt="Diagram for this question" />}
       <div className={cx("font-semibold leading-snug", compact ? "text-base" : "text-lg sm:text-xl")}>
         <InlineMd>{q.prompt}</InlineMd>
       </div>
@@ -82,6 +84,7 @@ export function QuestionView({ q, value, onChange, reveal, onPick, disabled, com
 
 function Options({ q, value, onChange, onPick, reveal, locked }: Omit<Props, "value"> & { value: ResponseValue; locked: boolean }) {
   const options = (q.payload as { options: string[] }).options;
+  const optionImages = (q.payload as { optionImages?: ImageRef[] }).optionImages;
   const multi = q.type === "multi_select";
   const selected = multi ? (value as number[]) : value === null ? [] : [value as number];
   const correct = reveal ? (reveal.answer as { correct: number[] }).correct : [];
@@ -111,7 +114,7 @@ function Options({ q, value, onChange, onPick, reveal, locked }: Omit<Props, "va
   });
 
   return (
-    <div className={cx("grid gap-3", options.length <= 4 && options.every((o) => o.length < 90) ? "sm:grid-cols-2" : "")} role={multi ? "group" : "radiogroup"}>
+    <div className={cx("grid gap-3", optionImages ? "grid-cols-2" : options.length <= 4 && options.every((o) => o.length < 90) ? "sm:grid-cols-2" : "")} role={multi ? "group" : "radiogroup"}>
       {options.map((opt, i) => {
         const isSel = selected.includes(i);
         const isRight = reveal && correct.includes(i);
@@ -125,7 +128,8 @@ function Options({ q, value, onChange, onPick, reveal, locked }: Omit<Props, "va
             onClick={() => choose(i)}
             disabled={locked && !reveal}
             className={cx(
-              "flex min-h-14 items-center gap-3 rounded-xl border-2 px-3 py-3 text-left transition",
+              "flex min-h-14 items-center gap-3 rounded-xl border-2 text-left transition",
+              optionImages ? "relative p-1.5" : "px-3 py-3",
               !reveal && isSel && "border-primary",
               !reveal && !isSel && "border-transparent hover:border-border",
               isRight && "border-good bg-good-soft",
@@ -137,15 +141,22 @@ function Options({ q, value, onChange, onPick, reveal, locked }: Omit<Props, "va
           >
             <span
               className={cx(
-                "grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold",
+                "grid shrink-0 place-items-center rounded-full font-bold",
+                optionImages ? "absolute top-2.5 left-2.5 z-10 size-6 text-xs shadow-card" : "size-8 text-sm",
                 isRight ? "bg-good text-white" : isWrong ? "bg-bad text-white" : multi && isSel ? "bg-primary text-primary-ink" : "bg-bg/60 text-text",
               )}
             >
               {isRight ? <Check className="size-4" /> : isWrong ? <X className="size-4" /> : multi && isSel ? <Check className="size-4" /> : i + 1}
             </span>
-            <span className="text-[0.95rem] leading-snug">
-              <InlineMd>{opt}</InlineMd>
-            </span>
+            {optionImages?.[i] ? (
+              <span className="min-w-0 flex-1">
+                <DiagramImage image={optionImages[i]} maxHeight={220} alt={opt} />
+              </span>
+            ) : (
+              <span className="text-[0.95rem] leading-snug">
+                <InlineMd>{opt}</InlineMd>
+              </span>
+            )}
           </button>
         );
       })}

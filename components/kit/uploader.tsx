@@ -18,7 +18,7 @@ interface Item {
 }
 
 /** Shrink big photos before upload: faster on mobile data and well within AI limits. */
-async function compressImage(file: File, maxSide: number): Promise<File> {
+export async function compressImage(file: File, maxSide: number): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/gif" || file.size < 900_000) return file;
   try {
     const bmp = await createImageBitmap(file);

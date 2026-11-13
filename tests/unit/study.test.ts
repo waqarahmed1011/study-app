@@ -8,7 +8,7 @@ import type { Attempt, DiagramRegion, Question, Topic } from "@/lib/types";
 const topic = (id: string, mastery: number): Topic => ({ id, user_id: "u", kit_id: "k", name: id, description: "", mastery, attempts: 0, correct: 0, created_at: "" });
 const question = (id: string, topic_id: string, difficulty: 1 | 2 | 3 = 1, type: Question["type"] = "mcq"): Question => ({
   id, user_id: "u", kit_id: "k", topic_id, type, prompt: id, payload: { options: ["a", "b"] }, answer: { correct: [0] },
-  explanation: "", difficulty, origin: "kit", diagram_id: null, verified: true, rating: 0, created_at: "",
+  explanation: "", difficulty, origin: "kit", diagram_id: null, image: null, region_id: null, gen_kind: null, verified: true, rating: 0, created_at: "",
 });
 const attempt = (qid: string, correct: boolean, at: number): Attempt => ({
   id: qid + at, user_id: "u", kit_id: "k", question_id: qid, topic_id: null, session_id: null, mode: "smart", correct, score: correct ? 1 : 0, response: 0, feedback: null, created_at: new Date(at).toISOString(),

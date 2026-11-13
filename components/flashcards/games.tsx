@@ -29,7 +29,9 @@ function setBest(key: string, v: number) {
 const strip = (s: string) => s.replace(/[$*_#`]/g, "");
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
-export function Games({ cards }: { cards: Flashcard[] }) {
+export function Games({ cards: all }: { cards: Flashcard[] }) {
+  // the games are text-only, so picture cards sit them out
+  const cards = all.filter((c) => !c.front_image && !c.back_image && c.front.trim() && c.back.trim());
   const [game, setGame] = useState<"match" | "speed" | null>(null);
   if (game === "match") return <MatchGame cards={cards} onExit={() => setGame(null)} />;
   if (game === "speed") return <SpeedRound cards={cards} onExit={() => setGame(null)} />;

@@ -2,7 +2,7 @@ import { must, route } from "@/lib/api";
 import { extractSource } from "@/lib/ai/pipeline";
 import type { IdCtx } from "@/lib/route-types";
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 // Read one upload right away (used for diagrams added to a finished kit).
 export const POST = route<IdCtx>(async (_req, repo, { params }) => {

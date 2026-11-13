@@ -41,6 +41,7 @@ export function publicQuestion(q: Question) {
     difficulty: q.difficulty,
     topic_id: q.topic_id,
     origin: q.origin,
+    image: q.image ?? null,
     verified: q.verified,
     rating: q.rating,
   };

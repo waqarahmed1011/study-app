@@ -122,7 +122,7 @@ export function createMockProvider(): AIProvider {
             title: "Diagram",
             structures: Array.from({ length: n }, (_, i) => {
               const y = 120 + i * 200;
-              return { label: `Structure ${i + 1}`, box_2d: [y, 250, y + 150, 600], label_box_2d: [y + 40, 700, y + 100, 950] };
+              return { label: `Structure ${i + 1}`, marker: "", box_2d: [y, 250, y + 150, 600], label_box_2d: [y + 40, 700, y + 100, 950] };
             }),
           } as never;
         }

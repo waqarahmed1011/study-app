@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { bucketOf, formatInterval, isCardDue, previewIntervals, type RatingName } from "@/lib/study/fsrs";
 import type { Flashcard } from "@/lib/types";
+import { DiagramImage } from "@/components/diagram-image";
 import { InlineMd } from "@/components/markdown";
 import { Button, Card, cx } from "@/components/ui";
 
@@ -17,12 +18,11 @@ const RATING_STYLE: Record<RatingName, string> = {
 function speak(text: string) {
   try {
     speechSynthesis.cancel();
-    speechSynthesis.speak(new SpeechSynthesisUtterance(text.replace(/[$*_#`]/g, "")));
+    if (text.trim()) speechSynthesis.speak(new SpeechSynthesisUtterance(text.replace(/[$*_#`]/g, "")));
   } catch {}
 }
 
-export function Deck({ initial }: { initial: Flashcard[] }) {
-  const [cards, setCards] = useState(initial);
+export function Deck({ cards, setCards }: { cards: Flashcard[]; setCards: (fn: (c: Flashcard[]) => Flashcard[]) => void }) {
   const [cram, setCram] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const [reviewed, setReviewed] = useState(0);
@@ -107,7 +107,7 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
       ) : (
         <>
           <div
-            className={cx("flip relative h-72 select-none sm:h-80", flipped && "flipped")}
+            className={cx("flip relative select-none", card.front_image || card.back_image ? "h-[28rem] sm:h-[30rem]" : "h-72 sm:h-80", flipped && "flipped")}
             onClick={() => setFlipped((f) => !f)}
             onPointerDown={(e) => (start.current = e.clientX)}
             onPointerMove={(e) => start.current !== null && flipped && setDrag(e.clientX - start.current)}
@@ -122,12 +122,14 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
             aria-label={flipped ? "Card answer. Press space to flip back" : "Card front. Press space to reveal"}
           >
             <div className="flip-inner relative h-full w-full">
-              <Card className="flip-face absolute inset-0 grid place-items-center overflow-auto p-6 text-center">
-                <div className="text-xl font-semibold sm:text-2xl"><InlineMd>{card.front}</InlineMd></div>
+              <Card className="flip-face absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-auto p-5 text-center">
+                {card.front_image && <DiagramImage image={card.front_image} maxHeight={300} className="w-full" alt="Card picture" />}
+                {card.front && <div className={cx("font-semibold", card.front_image ? "text-lg" : "text-xl sm:text-2xl")}><InlineMd>{card.front}</InlineMd></div>}
                 <span className="absolute bottom-3 text-xs text-muted">Tap or press space to flip</span>
               </Card>
-              <Card className="flip-face flip-back absolute inset-0 grid place-items-center overflow-auto p-6 text-center">
-                <div className="text-base sm:text-lg"><InlineMd>{card.back}</InlineMd></div>
+              <Card className="flip-face flip-back absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-auto p-5 text-center">
+                {card.back_image && <DiagramImage image={card.back_image} maxHeight={300} className="w-full" alt="Answer picture" />}
+                {card.back && <div className={cx(card.back_image ? "text-base font-semibold" : "text-base sm:text-lg")}><InlineMd>{card.back}</InlineMd></div>}
                 {drag !== 0 && (
                   <span className={cx("absolute top-3 rounded-full px-3 py-1 text-sm font-bold", drag > 0 ? "right-3 bg-good text-white" : "left-3 bg-bad text-white")}>
                     {drag > 0 ? "Good" : "Again"}
@@ -137,7 +139,8 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-center gap-2">
+          {/* on phones the buttons float just above the bottom tab bar, so tall picture cards never hide them */}
+          <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 mt-2 flex items-center justify-center gap-2 bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pt-5 pb-3 sm:static sm:mx-0 sm:mt-4 sm:bg-none sm:p-0">
             {flipped && intervals ? (
               (["again", "hard", "good", "easy"] as RatingName[]).map((r, i) => (
                 <button key={r} type="button" onClick={() => rate(r)} aria-label={`${r[0].toUpperCase() + r.slice(1)}, next in ${intervals[r]}`} className={cx("flex min-w-18 flex-col items-center rounded-2xl px-3 py-2 font-semibold active:scale-95", RATING_STYLE[r])}>

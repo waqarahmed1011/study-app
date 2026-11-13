@@ -96,10 +96,11 @@ ${wrapMaterial(material)}`;
 
 export const diagramDetectPrompt = `Detect every labelled structure in this study diagram.
 For each structure return:
-- label: its name exactly as printed (or the standard name if the image is unlabelled),
-- box_2d: a tight box around the structure itself,
-- label_box_2d: a tight box around its printed label text (empty array if there is none).
-Boxes are [ymin, xmin, ymax, xmax] normalised to 0-1000. Return at most 25 structures. Prefer precision over quantity.`;
+- label: its real name. If the label is printed as a word, copy it exactly. If the diagram is a quiz that points to the structure with a NUMBER or LETTER instead of a name, work out from the anatomy/science which structure the number points to and give that structure's standard name (e.g. a skeletal muscle cross-section: epimysium, perimysium, endomysium, fascicle, muscle fibre, myofibril). Never use the bare number as the label.
+- marker: the printed number/letter for quiz diagrams, otherwise "".
+- box_2d: a tight box around the structure itself (where the number's pointer line ends, not the number).
+- label_box_2d: a tight box around the printed label text or number (empty array if there is none).
+Boxes are [ymin, xmin, ymax, xmax] normalised to 0-1000. Include named structures that have no number too (e.g. "Bone", "Tendon"). Return at most 25 structures. Prefer precision over quantity.`;
 
 export const diagramFactsPrompt = (title: string, labels: string[], notes: string) =>
   `${wrapMaterial(notes)}

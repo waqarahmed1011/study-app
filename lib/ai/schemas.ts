@@ -74,7 +74,10 @@ export const DiagramDetectSchema = z.object({
   title: z.string().describe("What the diagram shows, e.g. 'Anterior muscles of the arm'"),
   structures: z.array(
     z.object({
-      label: z.string().describe("Name of the structure"),
+      label: z.string().describe("Real name of the structure, never just a number or letter"),
+      marker: z
+        .string()
+        .describe("If the diagram points to this structure with a printed number or letter instead of a name (a quiz diagram), that number/letter, e.g. '2'. Otherwise empty."),
       box_2d: z
         .array(z.number())
         .describe("[ymin, xmin, ymax, xmax] of the structure itself, normalised 0-1000"),

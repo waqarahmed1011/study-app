@@ -73,7 +73,7 @@ test("build a kit from pasted notes and study it every way", async ({ page }) =>
     } else {
       await radios.first().click();
     }
-    await expect(page.getByText(/Correct!|Not quite|Partly right/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Correct!|Not quite|Partly right/).first()).toBeVisible({ timeout: 20_000 });
     await page.getByRole("button", { name: "Next question" }).click();
   }
 
@@ -93,8 +93,9 @@ test("build a kit from pasted notes and study it every way", async ({ page }) =>
   await openTab(page, "Test", "Test");
   await page.getByRole("button", { name: /Create test/ }).click();
   await expect(page.getByRole("button", { name: "Submit test" })).toBeVisible({ timeout: 30_000 });
-  for (const q of await page.getByRole("radiogroup").all()) await q.getByRole("radio").first().click();
-  for (const box of await page.getByLabel("Your answer").all()) await box.fill("energy");
+  // Next keeps earlier pages mounted but hidden, so only touch visible fields
+  for (const q of await page.getByRole("radiogroup").filter({ visible: true }).all()) await q.getByRole("radio").first().click();
+  for (const box of await page.getByLabel("Your answer").filter({ visible: true }).all()) await box.fill("energy");
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Submit test" }).click();
   await expect(page.getByText(/fully correct/)).toBeVisible({ timeout: 30_000 });
@@ -132,6 +133,7 @@ test("diagram: detect, confirm, label quiz and tap quiz", async ({ page }) => {
 
   await page.getByRole("button", { name: "Confirm all" }).click();
   await page.getByRole("button", { name: "Start studying" }).click();
+  await expect(page.getByText(/8 picture flashcards and 8 picture questions/)).toBeVisible({ timeout: 20_000 });
 
   // label quiz: name the highlighted structure
   await expect(page.getByLabel("Structure name")).toBeVisible();
@@ -144,12 +146,14 @@ test("diagram: detect, confirm, label quiz and tap quiz", async ({ page }) => {
 
   // tap quiz: tap inside the target's box (mock boxes are at known places)
   await page.getByRole("tab", { name: /Tap to find/ }).click();
-  const target = await page.locator("text=/^Structure \\d$/").first().innerText();
+  const target = await page.getByTestId("tap-target").innerText();
   const idx = Number(target.split(" ")[1]) - 1;
   const img = page.getByAltText("Diagram, tap the named structure");
-  const box = (await img.boundingBox())!;
-  // mock box i: x 0.25-0.6, y (120+200i)/1000 .. +150
-  await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * ((120 + idx * 200 + 75) / 1000));
+  await expect(img).toBeVisible();
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+  const size = (await img.boundingBox())!;
+  // mock box i: x 0.25-0.6, y (120+200i)/1000 .. +150; position is relative to the image at click time
+  await img.click({ position: { x: size.width * 0.42, y: size.height * ((120 + idx * 200 + 75) / 1000) } });
   await expect(page.getByText("Correct!")).toBeVisible();
 
   // fact questions start unverified
@@ -158,4 +162,34 @@ test("diagram: detect, confirm, label quiz and tap quiz", async ({ page }) => {
   await expect(page.getByText("Unverified").first()).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Looks right" }).first().click();
   await expect(page.getByText("Verified").first()).toBeVisible();
+
+  // picture cards show up in the flashcard editor, both ways round
+  await openTab(page, "Flashcards", "Cards");
+  await page.getByRole("tab", { name: "Edit" }).click();
+  await expect(page.getByLabel("Term").filter({ hasText: "" }).first()).toBeVisible();
+  await expect(page.locator("textarea[aria-label=Term]").filter({ hasText: /^Name the highlighted structure$/ }).first()).toBeAttached();
+  await expect(page.locator("textarea[aria-label=Term]").filter({ hasText: /^Where is the Structure 1\?$/ })).toBeAttached();
+  await expect(page.getByRole("button", { name: "Remove term picture" }).first()).toBeVisible();
+
+  // make a card by hand with a picture on the definition side
+  const before = await page.locator("textarea[aria-label=Term]").count();
+  await page.getByRole("button", { name: "Add card" }).click();
+  await expect(page.locator("textarea[aria-label=Term]")).toHaveCount(before + 1);
+  await page.locator("textarea[aria-label=Term]").last().fill("Sarcomere");
+  await page.locator("textarea[aria-label=Definition]").last().fill("Basic contractile unit of a myofibril");
+  await page.locator("textarea[aria-label=Definition]").last().blur();
+  await page.getByTestId("card-image-input").last().setInputFiles(path.join(__dirname, "fixtures/diagram.png"));
+  await expect(page.getByRole("button", { name: "Remove definition picture" }).last()).toBeVisible({ timeout: 15_000 });
+
+  // the deck shows pictures on cards
+  await page.getByRole("tab", { name: "deck" }).click();
+  await expect(page.getByText("Reviewing")).toBeVisible();
+  // work through the queue until a picture card comes up
+  const pictures = page.locator("img[alt='Card picture'], img[alt='Answer picture']");
+  for (let i = 0; i < 30 && (await pictures.count()) === 0; i++) {
+    await page.getByRole("button", { name: "Show answer" }).click();
+    if (await pictures.count()) break;
+    await page.getByRole("button", { name: /^Easy, next in/ }).click();
+  }
+  await expect(pictures.first()).toBeAttached();
 });

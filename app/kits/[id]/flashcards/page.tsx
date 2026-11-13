@@ -10,5 +10,7 @@ export default async function FlashcardsPage({ params }: { params: Promise<{ id:
     repo.list("flashcards", { kit_id: id }, { orderBy: "created_at" }),
     repo.list("topics", { kit_id: id }),
   ]);
-  return <FlashcardsView cards={cards} topics={topics.map((t) => ({ id: t.id, name: t.name }))} />;
+  // editor order first, then creation order for cards made before ordering existed
+  const ordered = [...cards].sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.created_at.localeCompare(b.created_at));
+  return <FlashcardsView kitId={id} cards={ordered} topics={topics.map((t) => ({ id: t.id, name: t.name }))} />;
 }
