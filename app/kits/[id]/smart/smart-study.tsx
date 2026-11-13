@@ -4,14 +4,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicQuestion } from "@/lib/api";
 import { api } from "@/lib/client";
+import { describeAnswer, gradeObjective } from "@/lib/study/questions";
 import type { AnswerResult } from "@/lib/study/service";
-import { QUESTION_TYPE_LABEL } from "@/lib/types";
+import { QUESTION_TYPE_LABEL, type QuestionAnswer } from "@/lib/types";
 import { initialValue, isAnswered, QuestionView, type ResponseValue } from "@/components/questions/question-view";
 import { Markdown } from "@/components/markdown";
 import { Badge, Button, Card, cx, EmptyState, ErrorNote, ProgressBar } from "@/components/ui";
 
+// Smart Study gets the answer key with the question so it can mark you instantly
+// (practice tests don't: they keep exam conditions)
+type StudyQuestion = PublicQuestion & { answer: QuestionAnswer; explanation: string };
+
 interface NextRes {
-  question: PublicQuestion | null;
+  question: StudyQuestion | null;
   topic: { id: string; name: string; mastery: number } | null;
   seenBefore: boolean;
   level: { level: number; pct: number };
@@ -32,14 +37,24 @@ export function SmartStudy({ kitId, topics }: { kitId: string; topics: { id: str
   const [rated, setRated] = useState(0);
   const recent = useRef<string[]>([]);
 
+  // the next question is fetched in the background while you read the feedback
+  const prefetch = useRef<Promise<NextRes> | null>(null);
+
+  const fetchNext = useCallback(
+    () => api<NextRes>(`/api/kits/${kitId}/smart`, { body: { recentIds: recent.current, topicId: focusTopic || undefined } }),
+    [kitId, focusTopic],
+  );
+
   const loadNext = useCallback(async () => {
-    setBusy("next");
     setError(null);
     setResult(null);
     setHint(null);
     setRated(0);
+    const ready = prefetch.current;
+    prefetch.current = null;
+    if (!ready) setBusy("next");
     try {
-      const res = await api<NextRes>(`/api/kits/${kitId}/smart`, { body: { recentIds: recent.current, topicId: focusTopic || undefined } });
+      const res = await (ready ?? fetchNext());
       setData(res);
       if (res.question) {
         setValue(initialValue(res.question));
@@ -50,20 +65,38 @@ export function SmartStudy({ kitId, topics }: { kitId: string; topics: { id: str
     } finally {
       setBusy(null);
     }
-  }, [kitId, focusTopic]);
+  }, [fetchNext]);
 
   // fetching the first question on mount (and when the topic filter changes) is intended
   useEffect(() => {
+    prefetch.current = null; // a topic change makes any prefetched question stale
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadNext();
   }, [loadNext]);
 
   async function submit(v: ResponseValue) {
     if (!data?.question || result || busy) return;
-    setBusy("answer");
+    const q = data.question;
     setError(null);
+    const save = api<AnswerResult>(`/api/questions/${q.id}/answer`, { body: { response: v, sessionId, mode: "smart" } });
+    // queue the next question once this answer is recorded, so the scheduler sees it
+    prefetch.current = save.then(fetchNext, fetchNext);
+    prefetch.current.catch(() => {});
+
+    const local = gradeObjective(q.type, q.answer, v);
+    if (local) {
+      // marked on the device: feedback is instant, saving happens in the background
+      setResult({ ...local, feedback: null, correctAnswer: describeAnswer(q), answer: q.answer, explanation: q.explanation, mastery: null, level: data.level });
+      setSession((s) => ({ answered: s.answered + 1, correct: s.correct + (local.correct ? 1 : 0), streak: local.correct ? s.streak + 1 : 0 }));
+      save
+        .then((res) => setData((d) => (d ? { ...d, level: res.level } : d)))
+        .catch((err) => setError(`Your answer couldn't be saved: ${(err as Error).message}`));
+      return;
+    }
+    // short answers need the AI to mark them
+    setBusy("answer");
     try {
-      const res = await api<AnswerResult>(`/api/questions/${data.question.id}/answer`, { body: { response: v, sessionId, mode: "smart" } });
+      const res = await save;
       setResult(res);
       setData((d) => (d ? { ...d, level: res.level } : d));
       setSession((s) => ({ answered: s.answered + 1, correct: s.correct + (res.correct ? 1 : 0), streak: res.correct ? s.streak + 1 : 0 }));

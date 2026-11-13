@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { TableName } from "@/lib/types";
+import type { Kit, TableName } from "@/lib/types";
 import type { ListOptions, NewRow, Repo, Row } from "./repo";
 
 const BUCKET = "sources";
@@ -70,6 +70,13 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
       for (const [k, v] of Object.entries(where)) q = q.eq(k, v as never);
       const { error } = await q;
       fail(`delete ${t}`, error);
+    },
+    async setKitStep(kitId, step, status, error) {
+      const { data, error: err } = await sb.rpc("set_kit_step", { p_kit: kitId, p_step: step, p_status: status, p_error: error ?? null });
+      fail("set_kit_step", err);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) throw new Error(`kit ${kitId} not found`);
+      return row as Kit;
     },
     async putFile(p, data, contentType) {
       const { error } = await sb.storage

@@ -2,7 +2,7 @@
 import { PartyPopper, RotateCcw, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
-import { bucketOf, formatInterval, isCardDue, previewIntervals, type RatingName } from "@/lib/study/fsrs";
+import { bucketOf, formatInterval, isCardDue, previewIntervals, review, type RatingName } from "@/lib/study/fsrs";
 import type { Flashcard } from "@/lib/types";
 import { DiagramImage } from "@/components/diagram-image";
 import { InlineMd } from "@/components/markdown";
@@ -29,6 +29,7 @@ export function Deck({ cards, setCards }: { cards: Flashcard[]; setCards: (fn: (
   const [drag, setDrag] = useState(0);
   // the clock is read when a review happens, not during render
   const [lastReviewAt, setLastReviewAt] = useState(() => Date.now());
+  const [saveError, setSaveError] = useState(false);
   const start = useRef<number | null>(null);
 
   const queue = useMemo(() => {
@@ -47,14 +48,19 @@ export function Deck({ cards, setCards }: { cards: Flashcard[]; setCards: (fn: (
 
   const intervals = card ? previewIntervals(card.fsrs) : null;
 
-  async function rate(r: RatingName) {
+  function rate(r: RatingName) {
     if (!card) return;
+    const id = card.id;
+    // schedule on the device and move on at once; the server saves the same schedule
+    const now = new Date();
+    setCards((cs) => cs.map((c) => (c.id === id ? { ...c, fsrs: review(c.fsrs, r, now) } : c)));
     setFlipped(false);
     setDrag(0);
-    const updated = await api<Flashcard>(`/api/flashcards/${card.id}/review`, { body: { rating: r } });
-    setCards((cs) => cs.map((c) => (c.id === updated.id ? updated : c)));
     setReviewed((n) => n + 1);
-    setLastReviewAt(Date.now());
+    setLastReviewAt(now.getTime());
+    api<Flashcard>(`/api/flashcards/${id}/review`, { body: { rating: r } })
+      .then((saved) => setCards((cs) => cs.map((c) => (c.id === saved.id ? saved : c))))
+      .catch(() => setSaveError(true));
   }
 
   useEffect(() => {
@@ -107,6 +113,7 @@ export function Deck({ cards, setCards }: { cards: Flashcard[]; setCards: (fn: (
       ) : (
         <>
           <div
+            key={card.id /* a fresh element per card, so the next card never animates from its answer side */}
             className={cx("flip relative select-none", card.front_image || card.back_image ? "h-[28rem] sm:h-[30rem]" : "h-72 sm:h-80", flipped && "flipped")}
             onClick={() => setFlipped((f) => !f)}
             onPointerDown={(e) => (start.current = e.clientX)}
@@ -155,6 +162,7 @@ export function Deck({ cards, setCards }: { cards: Flashcard[]; setCards: (fn: (
               <Volume2 className="size-5" />
             </button>
           </div>
+          {saveError && <p className="mt-2 text-center text-xs text-bad">Some reviews didn&apos;t save. Check your connection; they&apos;ll be due again.</p>}
           <p className="mt-3 text-center text-xs text-muted">
             {queue.length} {cram ? "in practice queue" : "due"} · swipe right for Good, left for Again
           </p>

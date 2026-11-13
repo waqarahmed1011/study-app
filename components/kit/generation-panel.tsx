@@ -30,21 +30,31 @@ export function GenerationPanel({ kit, all = false, onDone }: { kit: Kit; all?: 
     running.current = true;
     setError(null);
     const status: Partial<Record<GenStep, StepStatus>> = fromScratch ? {} : { ...steps };
-    try {
-      for (const step of GEN_STEPS) {
-        if (status[step] === "done") continue;
-        status[step] = "running";
-        setSteps({ ...status });
+    // reading uploads and finding topics come first; then the four writing steps
+    // don't depend on each other, so they run at the same time
+    const runOne = async (step: GenStep) => {
+      if (status[step] === "done") return;
+      status[step] = "running";
+      setSteps({ ...status });
+      try {
         await api(`/api/kits/${kit.id}/generate`, { body: { step } });
         status[step] = "done";
+      } catch (err) {
+        status[step] = "error";
+        throw err;
+      } finally {
         setSteps({ ...status });
       }
+    };
+    try {
+      await runOne("extract");
+      await runOne("outline");
+      const results = await Promise.allSettled((["flashcards", "questions", "guide", "summary"] as GenStep[]).map(runOne));
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failed) throw failed.reason;
       onDone?.();
       router.refresh();
     } catch (err) {
-      const failed = GEN_STEPS.find((s) => status[s] === "running");
-      if (failed) status[failed] = "error";
-      setSteps({ ...status });
       setError((err as Error).message);
     } finally {
       running.current = false;
@@ -64,7 +74,7 @@ export function GenerationPanel({ kit, all = false, onDone }: { kit: Kit; all?: 
     <Card className="mx-auto max-w-lg p-6">
       <h2 className="text-xl font-bold">{all ? "Updating your kit" : "Building your study kit"}</h2>
       <p className="mt-1 text-sm text-muted">
-        This usually takes under a minute. Big PDFs on the free AI tier can take a few minutes. Keep this tab open.
+        Usually 15–40 seconds. Big PDFs can take longer on the free AI tier. Keep this tab open.
       </p>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(doneCount / GEN_STEPS.length) * 100}%` }} />

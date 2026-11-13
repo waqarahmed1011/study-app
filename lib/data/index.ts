@@ -14,9 +14,11 @@ export async function getRepo(): Promise<Repo> {
   await connection();
   if (!useSupabase) return createLocalRepo();
   const sb = await createSupabaseServer();
-  const { data } = await sb.auth.getUser();
-  if (!data.user) throw new UnauthorizedError("Not signed in");
-  return createSupabaseRepo(sb, data.user.id);
+  // verified locally against the project's public signing key (no network call per request)
+  const { data } = await sb.auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) throw new UnauthorizedError("Not signed in");
+  return createSupabaseRepo(sb, userId);
 }
 
 export type { Repo } from "./repo";

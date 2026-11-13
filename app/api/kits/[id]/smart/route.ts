@@ -1,4 +1,4 @@
-import { must, publicQuestion, route } from "@/lib/api";
+import { HttpError, route, studyQuestion } from "@/lib/api";
 import { generateMoreQuestions } from "@/lib/ai/pipeline";
 import { freshCount, buildStats, pickNextQuestion } from "@/lib/study/scheduler";
 import { kitLevel } from "@/lib/study/service";
@@ -8,12 +8,16 @@ import type { IdCtx } from "@/lib/route-types";
 // when the student has worked through most of it.
 export const POST = route<IdCtx>(async (req, repo, { params }) => {
   const { id } = await params;
-  await must(repo.get("kits", id), "Kit not found");
   const { recentIds = [], topicId } = (await req.json().catch(() => ({}))) as { recentIds?: string[]; topicId?: string };
-
-  let questions = await repo.list("questions", { kit_id: id });
-  const topics = await repo.list("topics", { kit_id: id });
-  const attempts = await repo.list("attempts", { kit_id: id });
+  // one round of parallel reads instead of four in a row
+  const [kit, initialQuestions, topics, attempts] = await Promise.all([
+    repo.get("kits", id),
+    repo.list("questions", { kit_id: id }),
+    repo.list("topics", { kit_id: id }),
+    repo.list("attempts", { kit_id: id }),
+  ]);
+  if (!kit) throw new HttpError(404, "Kit not found");
+  let questions = initialQuestions;
   const stats = buildStats(attempts);
   const now = Date.now();
 
@@ -33,7 +37,7 @@ export const POST = route<IdCtx>(async (req, repo, { params }) => {
   const next = pickNextQuestion({ questions: pool, topics, stats, recentIds, now });
   const topic = next ? topics.find((t) => t.id === next.topic_id) : null;
   return {
-    question: next ? publicQuestion(next) : null,
+    question: next ? studyQuestion(next) : null,
     topic: topic ? { id: topic.id, name: topic.name, mastery: topic.mastery } : null,
     seenBefore: next ? stats.has(next.id) : false,
     level: await kitLevel(repo, id, topics),

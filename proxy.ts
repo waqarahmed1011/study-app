@@ -22,11 +22,14 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const { data } = await supabase.auth.getUser();
+  // getClaims verifies the signed (ES256) session token locally, refreshing it if
+  // needed, so most requests skip a round trip to the Supabase auth server
+  const { data } = await supabase.auth.getClaims();
+  const signedIn = Boolean(data?.claims?.sub);
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
 
-  if (!data.user && !isPublic) {
+  if (!signedIn && !isPublic) {
     if (path.startsWith("/api/")) {
       return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }

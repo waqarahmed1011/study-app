@@ -1,4 +1,4 @@
-import type { TableMap, TableName } from "@/lib/types";
+import type { GenStep, Kit, StepStatus, TableMap, TableName } from "@/lib/types";
 
 export type Row<T extends TableName> = TableMap[T];
 export type NewRow<T extends TableName> = Omit<
@@ -42,6 +42,9 @@ export interface Repo {
     where: Partial<Row<T>>,
   ): Promise<void>;
 
+  /** Atomically record a generation step's status (steps run in parallel). */
+  setKitStep(kitId: string, step: GenStep, status: StepStatus, error?: string): Promise<Kit>;
+
   putFile(path: string, data: Uint8Array, contentType: string): Promise<void>;
   getFile(path: string): Promise<{ data: Uint8Array; contentType: string }>;
   removeFile(path: string): Promise<void>;
@@ -60,4 +63,12 @@ export function sortRows<T>(
     const r = av > bv ? 1 : -1;
     return ascending ? r : -r;
   });
+}
+
+/** Shared rule for a kit's overall status after a step changes (mirrors set_kit_step in SQL). */
+export function nextKitStatus(current: Kit["status"], steps: Kit["gen_steps"], changed: StepStatus): Kit["status"] {
+  if (current === "ready") return "ready"; // a built kit stays usable while it's updated
+  if (changed === "error") return "error";
+  const all = ["extract", "outline", "flashcards", "questions", "guide", "summary"] as const;
+  return all.every((s) => steps[s] === "done") ? "ready" : "generating";
 }

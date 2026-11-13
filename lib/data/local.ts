@@ -3,7 +3,8 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import type { TableName } from "@/lib/types";
-import { sortRows, type ListOptions, type NewRow, type Repo, type Row } from "./repo";
+import { nextKitStatus, sortRows, type ListOptions, type NewRow, type Repo, type Row } from "./repo";
+import type { Kit } from "@/lib/types";
 
 // JSON-file backend. One user ("local"). Good for trying the app with no
 // accounts and for automated tests. Not for Vercel (read-only filesystem).
@@ -93,6 +94,17 @@ export function createLocalRepo(): Repo {
     async removeWhere(t, where) {
       mutate((db) => {
         db[t] = rowsOf(db, t).filter((x) => !(x.user_id === userId && matches(x, where as Record<string, unknown>)));
+      });
+    },
+    async setKitStep(kitId, step, status, error) {
+      return mutate((db) => {
+        const k = rowsOf(db, "kits").find((x) => x.id === kitId && x.user_id === userId) as unknown as Kit | undefined;
+        if (!k) throw new Error(`kit ${kitId} not found`);
+        k.gen_steps = { ...k.gen_steps, [step]: status };
+        if (status === "error") k.gen_error = error ?? "Unknown error";
+        k.status = nextKitStatus(k.status, k.gen_steps, status);
+        k.updated_at = new Date().toISOString();
+        return structuredClone(k);
       });
     },
     async putFile(p, data, contentType) {

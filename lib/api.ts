@@ -47,3 +47,8 @@ export function publicQuestion(q: Question) {
   };
 }
 export type PublicQuestion = ReturnType<typeof publicQuestion>;
+
+/** Smart Study's version: includes the answer key so the browser can mark instantly. */
+export function studyQuestion(q: Question) {
+  return { ...publicQuestion(q), answer: q.answer, explanation: q.explanation };
+}

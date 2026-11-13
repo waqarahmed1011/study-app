@@ -59,31 +59,55 @@ function stripFences(s: string) {
   return s.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
 }
 
+/**
+ * Thinking roughly triples response time (14s vs 5.6s for a question batch), so
+ * it's off unless a task asks for it. Lite models don't take the setting at all.
+ */
+function thinkingFor(lite: boolean | undefined, think: boolean | undefined) {
+  if (lite || think) return undefined;
+  return { thinkingBudget: 0 };
+}
+
+function isThinkingConfigError(err: unknown) {
+  return /thinking/i.test(String((err as Error)?.message ?? err));
+}
+
 export function createGeminiProvider(apiKey: string): AIProvider {
   const ai = new GoogleGenAI({ apiKey });
+
+  /** generateContent, dropping the thinking setting if a (renamed) model rejects it. */
+  const generate = async (params: Parameters<typeof ai.models.generateContent>[0]) => {
+    try {
+      return await withRetry(() => ai.models.generateContent(params));
+    } catch (err) {
+      if (!params.config?.thinkingConfig || !isThinkingConfigError(err)) throw err;
+      const { thinkingConfig: _drop, ...config } = params.config;
+      void _drop;
+      return withRetry(() => ai.models.generateContent({ ...params, config }));
+    }
+  };
 
   return {
     name: `gemini (${MODEL})`,
 
-    async json({ schema, system, prompt, files, lite }) {
+    async json({ schema, system, prompt, files, lite, think }) {
       const jsonSchema = toGeminiSchema(schema);
       let lastErr: unknown;
       // one retry on invalid JSON, with the validation error fed back
       for (let attempt = 0; attempt < 2; attempt++) {
         const extra =
           attempt === 0 ? "" : `\n\nYour previous reply was invalid: ${String(lastErr).slice(0, 500)}. Return valid JSON only.`;
-        const res = await withRetry(() =>
-          ai.models.generateContent({
-            model: lite ? LITE_MODEL : MODEL,
-            contents: [{ role: "user", parts: toParts(prompt + extra, files) }],
-            config: {
-              systemInstruction: system,
-              responseMimeType: "application/json",
-              responseJsonSchema: jsonSchema,
-              temperature: 0.4,
-            },
-          }),
-        );
+        const res = await generate({
+          model: lite ? LITE_MODEL : MODEL,
+          contents: [{ role: "user", parts: toParts(prompt + extra, files) }],
+          config: {
+            systemInstruction: system,
+            responseMimeType: "application/json",
+            responseJsonSchema: jsonSchema,
+            temperature: 0.4,
+            thinkingConfig: thinkingFor(lite, think),
+          },
+        });
         try {
           return schema.parse(JSON.parse(stripFences(res.text ?? "")));
         } catch (err) {
@@ -93,14 +117,12 @@ export function createGeminiProvider(apiKey: string): AIProvider {
       throw new Error(`The AI returned malformed output: ${String(lastErr).slice(0, 300)}`);
     },
 
-    async text({ system, prompt, files, lite }) {
-      const res = await withRetry(() =>
-        ai.models.generateContent({
-          model: lite ? LITE_MODEL : MODEL,
-          contents: [{ role: "user", parts: toParts(prompt, files) }],
-          config: { systemInstruction: system, temperature: 0.3 },
-        }),
-      );
+    async text({ system, prompt, files, lite, think }) {
+      const res = await generate({
+        model: lite ? LITE_MODEL : MODEL,
+        contents: [{ role: "user", parts: toParts(prompt, files) }],
+        config: { systemInstruction: system, temperature: 0.3, thinkingConfig: thinkingFor(lite, think) },
+      });
       return res.text ?? "";
     },
 
@@ -112,7 +134,8 @@ export function createGeminiProvider(apiKey: string): AIProvider {
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           })),
-          config: { systemInstruction: system, temperature: 0.5 },
+          // no thinking: the first words of a tutor reply arrive in about a second
+          config: { systemInstruction: system, temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
         }),
       );
       for await (const chunk of stream) {

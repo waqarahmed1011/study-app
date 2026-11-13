@@ -69,18 +69,21 @@ export async function answerQuestion(
     feedback = g.feedback;
   }
 
-  await repo.insert("attempts", {
-    kit_id: q.kit_id,
-    question_id: q.id,
-    topic_id: q.topic_id,
-    session_id: opts.sessionId,
-    mode: opts.mode,
-    correct,
-    score,
-    response: response ?? null,
-    feedback,
-  });
-  const topic = await applyToTopic(repo, q.topic_id, q.difficulty, score);
+  // record the attempt and update the topic at the same time
+  const [, topic] = await Promise.all([
+    repo.insert("attempts", {
+      kit_id: q.kit_id,
+      question_id: q.id,
+      topic_id: q.topic_id,
+      session_id: opts.sessionId,
+      mode: opts.mode,
+      correct,
+      score,
+      response: response ?? null,
+      feedback,
+    }),
+    applyToTopic(repo, q.topic_id, q.difficulty, score),
+  ]);
 
   return {
     correct,

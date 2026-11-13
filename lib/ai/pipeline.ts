@@ -3,11 +3,11 @@ import type { Repo } from "@/lib/data/repo";
 import { box2dToBox } from "@/lib/diagram/geometry";
 import { newFsrsState } from "@/lib/study/fsrs";
 import { normaliseQuestion } from "@/lib/study/questions";
-import { GEN_STEPS, type Diagram, type DiagramRegion, type GenStep, type Kit, type Source, type Topic } from "@/lib/types";
+import type { Diagram, DiagramRegion, GenStep, Kit, Source, Topic } from "@/lib/types";
 import { nanoid } from "nanoid";
 import * as P from "./prompts";
 import { getAI } from "./provider";
-import { DiagramDetectSchema, FlashcardsSchema, OutlineSchema, QuestionsSchema } from "./schemas";
+import { DiagramDetectSchema, FlashcardsSchema, OutlineSchema, QuestionsSchema, type RawQuestion } from "./schemas";
 
 export function materialOf(sources: Source[]) {
   return sources
@@ -17,17 +17,7 @@ export function materialOf(sources: Source[]) {
 }
 
 async function setStep(repo: Repo, kit: Kit, step: GenStep, status: "running" | "done" | "error", error?: string) {
-  const fresh = (await repo.get("kits", kit.id)) ?? kit;
-  const gen_steps = { ...fresh.gen_steps, [step]: status };
-  const allDone = GEN_STEPS.every((s) => gen_steps[s] === "done");
-  // a kit that's already built stays usable while it's being updated
-  const kitStatus = fresh.status === "ready" ? "ready" : status === "error" ? "error" : allDone ? "ready" : "generating";
-  return repo.update("kits", kit.id, {
-    gen_steps,
-    gen_error: error ?? (status === "error" ? "Unknown error" : null),
-    status: kitStatus,
-    updated_at: new Date().toISOString(),
-  });
+  return repo.setKitStep(kit.id, step, status, error);
 }
 
 /** Map a topic name from the model back to a topic id (case-insensitive, falls back to the first topic). */
@@ -48,15 +38,17 @@ export async function extractSource(repo: Repo, source: Source) {
   }
   try {
     const file = await repo.getFile(source.storage_path!);
-    const md = await ai.text({
-      task: "extract",
-      system: P.SYSTEM_TUTOR,
-      prompt: P.extractPrompt(source.kind),
-      files: [{ mimeType: source.mime || file.contentType, data: file.data }],
-    });
-    const updated = await repo.update("sources", source.id, { extracted_md: md.trim(), status: "done", error: null });
-    if (source.kind === "diagram") await detectDiagram(repo, updated, file);
-    return updated;
+    // a diagram's text and its labels are read at the same time
+    const [md] = await Promise.all([
+      ai.text({
+        task: "extract",
+        system: P.SYSTEM_TUTOR,
+        prompt: P.extractPrompt(source.kind),
+        files: [{ mimeType: source.mime || file.contentType, data: file.data }],
+      }),
+      source.kind === "diagram" ? detectDiagram(repo, source, file) : null,
+    ]);
+    return repo.update("sources", source.id, { extracted_md: md.trim(), status: "done", error: null });
   } catch (err) {
     return repo.update("sources", source.id, { status: "error", error: String((err as Error).message).slice(0, 500) });
   }
@@ -68,6 +60,8 @@ export async function detectDiagram(repo: Repo, source: Source, file?: { data: U
   const res = await ai.json({
     task: "diagram_detect",
     schema: DiagramDetectSchema,
+    // the one task where thinking clearly helps: without it numbered labels get misread
+    think: true,
     prompt: P.diagramDetectPrompt,
     files: [{ mimeType: source.mime || f.contentType, data: f.data }],
   });
@@ -121,7 +115,9 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
 
     switch (step) {
       case "extract": {
-        for (const s of sources.filter((s) => s.status === "pending")) await extractSource(repo, s);
+        // read up to 3 uploads at once (the free tier allows a handful of parallel requests)
+        const pending = sources.filter((s) => s.status === "pending");
+        for (let i = 0; i < pending.length; i += 3) await Promise.all(pending.slice(i, i + 3).map((s) => extractSource(repo, s)));
         const after = await repo.list("sources", { kit_id: kitId });
         if (!after.some((s) => s.status === "done")) {
           const errs = after.map((s) => s.error).filter(Boolean).join("; ");
@@ -133,6 +129,7 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         const existing = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
         const out = await ai.json({
           task: "outline",
+          lite: true,
           schema: OutlineSchema,
           system: P.SYSTEM_TUTOR,
           prompt: P.outlinePrompt(newMaterial, existing.map((t) => t.name), kit.title === "Untitled kit" ? "" : kit.title),
@@ -155,7 +152,7 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         // nothing new to make cards from (e.g. "Update kit" with no new uploads)
         if (!fresh.length && (await repo.list("flashcards", { kit_id: kitId }, { limit: 1 })).length) break;
         const ts = (await topics()).filter((t) => !t.name.startsWith("Diagram: "));
-        const res = await ai.json({ task: "flashcards", schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
+        const res = await ai.json({ task: "flashcards", lite: true, schema: FlashcardsSchema, system: P.SYSTEM_TUTOR, prompt: P.flashcardsPrompt(newMaterial, ts.map((t) => t.name)) });
         const resolve = topicResolver(ts);
         const now = new Date();
         await repo.insertMany(
@@ -181,6 +178,8 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
         const ts = (await topics()).map((t) => t.name);
         const md = await ai.text({
           task: step,
+          // the summary is short and simple; the guide gets the main model
+          lite: step === "summary",
           system: P.SYSTEM_TUTOR,
           prompt: step === "guide" ? P.guidePrompt(allMaterial, ts) : P.summaryPrompt(allMaterial, ts),
         });
@@ -200,14 +199,25 @@ export async function runStep(repo: Repo, kitId: string, step: GenStep) {
 export async function generateQuestions(repo: Repo, kitId: string, material: string, topics: Topic[], count: number, focus?: string) {
   const ai = await getAI();
   if (!topics.length) throw new Error("This kit has no topics yet.");
-  const res = await ai.json({
-    task: focus ? "more_questions" : "questions",
-    schema: QuestionsSchema,
-    system: P.SYSTEM_TUTOR,
-    prompt: P.questionsPrompt(material, topics.map((t) => t.name), count, focus),
-  });
+  // One long reply is the slowest part of building a kit (~18s for 12 questions).
+  // Split the topics into up to 4 batches and write them side by side instead.
+  const batchCount = Math.max(1, Math.min(4, topics.length, Math.ceil(count / 5)));
+  const batches = Array.from({ length: batchCount }, (_, i) => topics.filter((_, t) => t % batchCount === i));
+  const settled = await Promise.allSettled(
+    batches.map((batch) =>
+      ai.json({
+        task: focus ? "more_questions" : "questions",
+        schema: QuestionsSchema,
+        system: P.SYSTEM_TUTOR,
+        prompt: P.questionsPrompt(material, batch.map((t) => t.name), Math.max(3, Math.round((count * batch.length) / topics.length)), focus),
+      }),
+    ),
+  );
+  const ok = settled.filter((r): r is PromiseFulfilledResult<{ questions: RawQuestion[] }> => r.status === "fulfilled");
+  if (!ok.length) throw (settled[0] as PromiseRejectedResult).reason;
   const resolve = topicResolver(topics);
-  const rows = res.questions
+  const rows = ok
+    .flatMap((r) => r.value.questions)
     .map(normaliseQuestion)
     .filter((q): q is NonNullable<typeof q> => q !== null)
     .map((q) => ({

@@ -11,12 +11,15 @@ export const POST = route<IdCtx>(async (req, repo, { params }) => {
   const { rating } = (await req.json()) as { rating: RatingName };
   if (!(rating in RATINGS)) throw new HttpError(400, "Bad rating");
   const fsrs = review(card.fsrs, rating);
-  const updated = await repo.update("flashcards", id, { fsrs });
-  await repo.insert("attempts", {
-    kit_id: card.kit_id, question_id: null, topic_id: card.topic_id, session_id: null, mode: "flashcards",
-    correct: SCORE[rating] >= 1, score: SCORE[rating], response: rating, feedback: null,
-  });
-  // flashcards nudge mastery gently (treated as easy recall)
-  await applyToTopic(repo, card.topic_id, 1, SCORE[rating]);
+  // all three writes are independent, so they go out together
+  const [updated] = await Promise.all([
+    repo.update("flashcards", id, { fsrs }),
+    repo.insert("attempts", {
+      kit_id: card.kit_id, question_id: null, topic_id: card.topic_id, session_id: null, mode: "flashcards",
+      correct: SCORE[rating] >= 1, score: SCORE[rating], response: rating, feedback: null,
+    }),
+    // flashcards nudge mastery gently (treated as easy recall)
+    applyToTopic(repo, card.topic_id, 1, SCORE[rating]),
+  ]);
   return updated;
 });

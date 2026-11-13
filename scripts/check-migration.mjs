@@ -14,14 +14,17 @@ await db.exec(`
   create table storage.objects (id serial primary key, bucket_id text, name text);
   create function storage.foldername(name text) returns text[] language sql as $$ select string_to_array(name, '/') $$;
 `);
-let sql = fs.readFileSync(new URL("../supabase/migrations/0001_init.sql", import.meta.url), "utf8");
-// PGlite ships without pgcrypto; gen_random_uuid() is built into Postgres 13+
-sql = sql.replace("create extension if not exists pgcrypto;", "");
-try {
-  await db.exec(sql);
-} catch (e) {
-  console.error("Migration failed:", e.message, "at position", e.position);
-  process.exit(1);
+const dir = new URL("../supabase/migrations/", import.meta.url);
+for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+  // PGlite ships without pgcrypto; gen_random_uuid() is built into Postgres 13+
+  const sql = fs.readFileSync(new URL(file, dir), "utf8").replace("create extension if not exists pgcrypto;", "");
+  try {
+    await db.exec(sql);
+    console.log("applied", file);
+  } catch (e) {
+    console.error(`Migration ${file} failed:`, e.message, "at position", e.position);
+    process.exit(1);
+  }
 }
 await db.exec(`alter table storage.objects enable row level security;`);
 
@@ -55,5 +58,13 @@ console.log("tables:", tables.rows.map((r) => r.tablename).join(", "));
 console.log("A sees", mine.rows.length, "kit(s), owned by", mine.rows[0]?.user_id === A ? "A" : "??");
 console.log("B sees", theirs.rows.length, "kit(s)");
 console.log("B inserting as A blocked:", blocked);
-if (mine.rows.length !== 1 || theirs.rows.length !== 0 || !blocked) process.exit(1);
+// atomic step updates: parallel steps must not lose each other's status
+const kitId = (await as(A, `select id from public.kits limit 1`)).rows[0].id;
+for (const step of ["extract", "outline"]) await as(A, `select public.set_kit_step('${kitId}', '${step}', 'done')`);
+await Promise.all(["flashcards", "questions", "guide", "summary"].map((st) => as(A, `select public.set_kit_step('${kitId}', '${st}', 'done')`)));
+const k = (await as(A, `select status, gen_steps from public.kits where id = '${kitId}'`)).rows[0];
+const otherUser = (await as(B, `select public.set_kit_step('${kitId}', 'extract', 'error')`)).rows[0];
+console.log("kit after 6 steps:", k.status, Object.keys(k.gen_steps).length, "steps recorded");
+console.log("B can't touch A's kit steps:", otherUser.set_kit_step === null);
+if (mine.rows.length !== 1 || theirs.rows.length !== 0 || !blocked || k.status !== "ready" || otherUser.set_kit_step !== null) process.exit(1);
 console.log("RLS OK");
