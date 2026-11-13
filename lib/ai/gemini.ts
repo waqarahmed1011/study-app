@@ -36,6 +36,25 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   }
 }
 
+/**
+ * Gemini accepts a subset of JSON Schema. Drop the "$schema" header and the
+ * +-2^53 bounds zod adds to every integer, which add nothing and can be rejected.
+ */
+export function toGeminiSchema(schema: z.ZodType): unknown {
+  const clean = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(clean);
+    if (!node || typeof node !== "object") return node;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k === "$schema") continue;
+      if ((k === "minimum" || k === "maximum") && typeof v === "number" && Math.abs(v) >= Number.MAX_SAFE_INTEGER) continue;
+      out[k] = clean(v);
+    }
+    return out;
+  };
+  return clean(z.toJSONSchema(schema, { target: "draft-7" }));
+}
+
 function stripFences(s: string) {
   return s.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
 }
@@ -47,7 +66,7 @@ export function createGeminiProvider(apiKey: string): AIProvider {
     name: `gemini (${MODEL})`,
 
     async json({ schema, system, prompt, files, lite }) {
-      const jsonSchema = z.toJSONSchema(schema, { target: "draft-7" });
+      const jsonSchema = toGeminiSchema(schema);
       let lastErr: unknown;
       // one retry on invalid JSON, with the validation error fed back
       for (let attempt = 0; attempt < 2; attempt++) {
