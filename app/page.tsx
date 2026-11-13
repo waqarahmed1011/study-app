@@ -9,6 +9,7 @@ import { DailyGoal } from "@/components/daily-goal";
 function ago(iso: string | null) {
   if (!iso) return "Not studied yet";
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return "Studied just now";
   if (m < 60) return `Studied ${m}m ago`;
   const h = Math.round(m / 60);
   if (h < 24) return `Studied ${h}h ago`;

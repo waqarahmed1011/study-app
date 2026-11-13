@@ -70,6 +70,8 @@ function Runner({ kitId, test, questions }: Props) {
   }, [deadline]);
 
   useEffect(() => {
+    // auto-submit when an enforced timer runs out
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (left <= 0 && test.config.enforceTime) submit();
   }, [left, test.config.enforceTime, submit]);
 

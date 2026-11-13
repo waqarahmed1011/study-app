@@ -13,6 +13,8 @@ function between(s: string, tag: string) {
 
 function sentences(material: string) {
   return material
+    .replace(/^## Source:.*$/gm, "")
+    .replace(/^#+ .*$/gm, "")
     .replace(/[#*_>`]/g, " ")
     .split(/(?<=[.!?])\s+|\n+/)
     .map((s) => s.trim())

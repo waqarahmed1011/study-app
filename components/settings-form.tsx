@@ -1,8 +1,8 @@
 "use client";
 import { Download, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
+import { useLocalSetting } from "@/lib/use-local-setting";
 import { Button, Card, cx } from "@/components/ui";
 
 const THEMES = [
@@ -13,29 +13,17 @@ const THEMES = [
 
 export function SettingsForm({ info }: { info: { storage: string; ai: string } }) {
   const router = useRouter();
-  const [theme, setTheme] = useState("midnight");
-  const [goal, setGoal] = useState(20);
-
-  useEffect(() => {
-    try {
-      setTheme(localStorage.getItem("theme") || "midnight");
-      setGoal(Number(localStorage.getItem("dailyGoal")) || 20);
-    } catch {}
-  }, []);
+  const [theme, setTheme] = useLocalSetting("theme", "midnight");
+  const [goalText, setGoalText] = useLocalSetting("dailyGoal", "20");
+  const goal = Number(goalText) || 20;
 
   function pickTheme(id: string) {
     setTheme(id);
-    document.documentElement.dataset.theme = id;
-    try {
-      localStorage.setItem("theme", id);
-    } catch {}
+    document.documentElement.setAttribute("data-theme", id);
   }
 
   function saveGoal(n: number) {
-    setGoal(n);
-    try {
-      localStorage.setItem("dailyGoal", String(n));
-    } catch {}
+    setGoalText(String(n));
   }
 
   async function wipe() {

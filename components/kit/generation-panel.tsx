@@ -51,7 +51,9 @@ export function GenerationPanel({ kit, all = false, onDone }: { kit: Kit; all?: 
     }
   }
 
+  // generation starts as soon as the panel mounts
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     run(all);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

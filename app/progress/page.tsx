@@ -59,7 +59,7 @@ export default async function ProgressPage() {
             const v = perDay.get(d)!;
             return (
               <div key={d} className="group relative flex flex-1 flex-col items-center justify-end gap-1">
-                <div className="flex w-full flex-col justify-end overflow-hidden rounded-t-md bg-surface-2" style={{ height: `${(v.n / max) * 100}%`, minHeight: v.n ? 4 : 0 }}>
+                <div className="flex w-full flex-col justify-end overflow-hidden rounded-t-md bg-border" style={{ height: `${(v.n / max) * 100}%`, minHeight: v.n ? 4 : 0 }}>
                   <div className="w-full bg-primary" style={{ height: `${v.n ? (v.right / v.n) * 100 : 0}%` }} />
                 </div>
                 <span className="text-[10px] text-muted">{new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "narrow" })}</span>

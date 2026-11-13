@@ -154,6 +154,8 @@ function SpeedRound({ cards, onExit }: { cards: Flashcard[]; onExit: () => void 
   const [card, setCard] = useState<Flashcard>(() => cards[0]);
   const [options, setOptions] = useState<Flashcard[]>([]);
   const order = useRef<Flashcard[]>([]);
+  const scoreRef = useRef(0);
+  const endsAt = useRef(0);
   const best = getBest("best-speed");
 
   function deal() {
@@ -164,31 +166,38 @@ function SpeedRound({ cards, onExit }: { cards: Flashcard[]; onExit: () => void 
   }
 
   function start() {
+    scoreRef.current = 0;
     setScore(0);
     setStreak(0);
     setLeft(DURATION);
+    // start() only runs from a click handler, never during render
+    // eslint-disable-next-line react-hooks/purity
+    endsAt.current = Date.now() + DURATION * 1000;
     setRunning(true);
     deal();
   }
 
+  // the timer ends the round from its own callback, so no effect has to react to it
   useEffect(() => {
     if (!running) return;
-    const t = setInterval(() => setLeft((l) => l - 1), 1000);
+    const t = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((endsAt.current - Date.now()) / 1000));
+      setLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(t);
+        setRunning(false);
+        const prev = getBest("best-speed");
+        if (!prev || scoreRef.current > prev) setBest("best-speed", scoreRef.current);
+      }
+    }, 250);
     return () => clearInterval(t);
   }, [running]);
-
-  useEffect(() => {
-    if (running && left <= 0) {
-      setRunning(false);
-      if (!best || score > best) setBest("best-speed", score);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left, running]);
 
   function answer(c: Flashcard) {
     if (!running) return;
     if (c.id === card.id) {
-      setScore((s) => s + (streak >= 2 ? 2 : 1));
+      scoreRef.current += streak >= 2 ? 2 : 1;
+      setScore(scoreRef.current);
       setStreak((s) => s + 1);
       setFlash("good");
     } else {

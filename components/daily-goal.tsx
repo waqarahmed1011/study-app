@@ -1,19 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useLocalSetting } from "@/lib/use-local-setting";
 
 /** Answers today vs the daily goal saved in Settings (per device). */
 export function DailyGoal({ answered }: { answered: number }) {
-  const [goal, setGoal] = useState(20);
-  useEffect(() => {
-    try {
-      const g = Number(localStorage.getItem("dailyGoal"));
-      if (g > 0) setGoal(g);
-    } catch {}
-  }, []);
+  const [goal] = useLocalSetting("dailyGoal", "20");
   return (
     <div className="mt-1 text-2xl font-bold">
       {answered}
-      <span className="text-base font-medium text-muted"> / {goal}</span>
+      <span className="text-base font-medium text-muted"> / {Number(goal) || 20}</span>
     </div>
   );
 }

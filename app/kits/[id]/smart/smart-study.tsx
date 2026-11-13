@@ -52,7 +52,9 @@ export function SmartStudy({ kitId, topics }: { kitId: string; topics: { id: str
     }
   }, [kitId, focusTopic]);
 
+  // fetching the first question on mount (and when the topic filter changes) is intended
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadNext();
   }, [loadNext]);
 
@@ -194,7 +196,7 @@ export function SmartStudy({ kitId, topics }: { kitId: string; topics: { id: str
           </div>
 
           {/* on phones the main action floats just above the bottom tab bar */}
-          <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 mt-5 flex justify-center py-2 sm:static sm:py-0">
+          <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 mt-5 flex justify-center bg-gradient-to-t from-bg via-bg/95 to-transparent px-4 pt-6 pb-3 sm:static sm:mx-0 sm:bg-none sm:p-0">
             {result ? (
               <Button size="lg" onClick={loadNext} disabled={busy === "next"} autoFocus className="shadow-card">
                 {busy === "next" ? <Loader2 className="size-4 animate-spin" /> : null} Next question

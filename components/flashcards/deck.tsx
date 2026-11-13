@@ -27,6 +27,8 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
   const [flipped, setFlipped] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [drag, setDrag] = useState(0);
+  // the clock is read when a review happens, not during render
+  const [lastReviewAt, setLastReviewAt] = useState(() => Date.now());
   const start = useRef<number | null>(null);
 
   const queue = useMemo(() => {
@@ -52,6 +54,7 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
     const updated = await api<Flashcard>(`/api/flashcards/${card.id}/review`, { body: { rating: r } });
     setCards((cs) => cs.map((c) => (c.id === updated.id ? updated : c)));
     setReviewed((n) => n + 1);
+    setLastReviewAt(Date.now());
   }
 
   useEffect(() => {
@@ -69,6 +72,7 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
   });
 
   const nextDue = cards.length ? cards.reduce((m, c) => (c.fsrs.due < m ? c.fsrs.due : m), cards[0].fsrs.due) : null;
+
 
   return (
     <div>
@@ -94,7 +98,7 @@ export function Deck({ initial }: { initial: Flashcard[] }) {
           <div className="text-xl font-bold">All caught up</div>
           <p className="text-sm text-muted">
             {reviewed ? `You reviewed ${reviewed} card${reviewed === 1 ? "" : "s"}. ` : ""}
-            {nextDue ? `Next card is due in ${formatInterval(Date.parse(nextDue) - Date.now())}.` : ""}
+            {nextDue ? `Next card is due in ${formatInterval(Date.parse(nextDue) - lastReviewAt)}.` : ""}
           </p>
           <Button variant="secondary" onClick={() => setCram(true)}>
             <RotateCcw className="size-4" /> Practice anyway
